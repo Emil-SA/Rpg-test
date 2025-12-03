@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Security.Cryptography.X509Certificates;
 
 
 
@@ -7,7 +8,7 @@ class Character
     public String Name;
     public int Health;
     public int AttackPower;
-    public int StartAttackPower;
+    public int BaseAttackPower;
     public int Armor;
     public int Resource;
     public int CritChance;
@@ -15,33 +16,40 @@ class Character
     public String ClassName;
     public List<string> Items = new();
 
+    public static Random RandomNumberGenerator = new Random();
     public Character(String name) => Name = name;
 
-    public bool IsAlive = true;
+    public bool IsAlive => Health > 0;
 
 
-    public void ItemCheck()
+    public void ApplyItems()
     {
         if (Items.Contains("Iron Sword"))
         {
             Items.Remove("Iron Sword");
-            StartAttackPower += 2;
+            BaseAttackPower += 1;
             CritChance += 5;
         }
+    }
+    public void PassiveItems()
+    {
         if (Items.Contains("Staff Of Fire"))
         {
             Resource++;
+        }
+        if (Health <= 10)
+        {
+            DrinkHealingPotion();
         }
     }
 
     public void Crit()
     {
-        Random random = new Random();
-        var RandomNumber = random.Next(0, 100);
+        var RandomNumber = RandomNumberGenerator.Next(0, 100);
         if (RandomNumber <= CritChance)
         {
             DidItCrit = true;
-            _ = AttackPower * 2;
+            AttackPower = BaseAttackPower * 2;
             Console.WriteLine($"{Name} crit ");
         } else
         {
@@ -60,14 +68,6 @@ class Character
     public void TakeDamage(int amount)
     {
         Health -= amount;
-        if (Health <= 10)
-        {
-            DrinkHealingPotion();
-        }
-        if (Health <= 0)
-        {
-            IsAlive = false;
-        }
     }
     public void ResourceGain()
     {
@@ -90,9 +90,9 @@ class Warrior : Character
     public Warrior(string name) : base(name)
     {
         ClassName = "Warrior";
-        Health = 200;
-        StartAttackPower = 3;
-        AttackPower = StartAttackPower;
+        Health = 20;
+        BaseAttackPower = 3;
+        AttackPower = BaseAttackPower;
         Armor = 1;
         Resource = 0;
         CritChance = 10;
@@ -110,14 +110,10 @@ class Warrior : Character
         {
             AttackPower += 1;
             Resource -= 2;
-        }
-        else if (DidItCrit == true)
-        {
-            AttackPower = StartAttackPower * 2;
-        }
-        else
-        {
-            AttackPower = StartAttackPower;
+            if (DidItCrit == true)
+            {
+                AttackPower += 1;
+            }
         }
     }
 }
@@ -127,9 +123,9 @@ class Mage : Character
     public Mage(string name) : base(name)
     {
         ClassName = "Mage";
-        Health = 150;
-        StartAttackPower = 2;
-        AttackPower = StartAttackPower;
+        Health = 15;
+        BaseAttackPower = 2;
+        AttackPower = BaseAttackPower;
         Armor = 1;   
         Resource = 0;
         CritChance = 20;
@@ -143,20 +139,17 @@ class Mage : Character
         {
             AttackPower += 10;
             Resource -= 4;
+            if (DidItCrit == true)
+            {
+                AttackPower += 10;
+            }
         } 
-        else if (DidItCrit == true) 
-        {
-            AttackPower = StartAttackPower * 2;
-        } 
-        else
-        {
-            AttackPower = StartAttackPower;
-        }
     }
 }
 
 class Battle
 {
+    public int Rounds = 0;
     Character c1;
     Character c2;
     public Battle(Character c1, Character c2)
@@ -167,33 +160,44 @@ class Battle
 
     public void Start()
     {
-        Thread.Sleep(2000);
         Console.Clear();
-        c1.ItemCheck();
-        c2.ItemCheck();
-        c1.Crit();
-        c2.Crit();
-        c1.PowerStrike();
-        c2.FireBall();
-        c1.TakeDamage(c2.AttackPower - c1.Armor);
-        c2.TakeDamage(c1.AttackPower - c2.Armor);
-        c1.ResourceGain();
-        c2.ResourceGain();
-        Console.WriteLine($"{c1.Name}'s Health:{c1.Health} Resource {c1.Resource}");
-        Console.WriteLine("vs");
-        Console.WriteLine($"{c2.Name}'s Health:{c2.Health} Resource {c2.Resource}");
-        if (c1.IsAlive == false)
+        c1.ApplyItems();
+        c2.ApplyItems();
+
+        while (c1.IsAlive && c2.IsAlive)
         {
-            Console.Clear();
-            Console.WriteLine($"{c2.Name} Won");
-        }
-        else if (c2.IsAlive == false)
-        {
-            Console.Clear();
-            Console.WriteLine($"{c1.Name} Won");
-        } else
-        {
-            Start();
+            Console.WriteLine("--------------------");
+            Console.WriteLine("");
+            Rounds ++;
+            Console.WriteLine($"-----Round{Rounds}-----");
+            Thread.Sleep(4000);
+            c1.AttackPower = c1.BaseAttackPower;
+            c2.AttackPower = c2.BaseAttackPower;
+            c1.PassiveItems();
+            c2.PassiveItems();
+            c1.Crit();
+            c2.Crit();
+            c1.PowerStrike();
+            c2.FireBall();
+            c1.TakeDamage(Math.Max(0,c2.AttackPower - c1.Armor));
+            c2.TakeDamage(Math.Max(0,c1.AttackPower - c2.Armor));
+            c1.ResourceGain();
+            c2.ResourceGain();
+            Console.WriteLine($"{c1.Name}'s Health:{c1.Health} Resource {c1.Resource}, Ap {c1.AttackPower}");
+            Console.WriteLine("vs");
+            Console.WriteLine($"{c2.Name}'s Health:{c2.Health} Resource {c2.Resource}, Ap {c2.AttackPower}");
+            if ( !c1.IsAlive && !c2.IsAlive )
+            {
+                Console.WriteLine("Both are dead");
+            }
+            else if (!c1.IsAlive)
+            {
+             Console.WriteLine($"{c2.Name} Won");
+            }
+             else if (!c2.IsAlive)
+             {
+             Console.WriteLine($"{c1.Name} Won");
+             }
         }
 
 
@@ -214,6 +218,7 @@ class Program
         character1.PrintStats();
         Console.WriteLine(" ");
         character2.PrintStats();
+        Thread.Sleep(4000);
         fight.Start();
 
         
