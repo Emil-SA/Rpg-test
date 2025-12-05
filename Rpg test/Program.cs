@@ -1,88 +1,79 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 
 
 
 class Character
 {
-    public String Name;
-    public int Health;
-    public int AttackPower;
-    public int BaseAttackPower;
-    public int Armor;
-    public int Resource;
-    public int CritChance;
-    public bool DidItCrit;
+    public String Name { get; }
+    public int Health { get; protected set; }
+    public int AttackPower { get; protected set; }
+    public int BaseAttackPower { get; protected set; }
+    public int Armor {  get; protected set; }
+    public int Resource { get; protected set; }
+    public int CritChance { get; protected set; }
     public String ClassName;
-    public List<string> Items = new();
+    public List<IItem> Items = new();
 
     public static Random RandomNumberGenerator = new Random();
     public Character(String name) => Name = name;
 
     public bool IsAlive => Health > 0;
-
+    public void ModifyBaseAttackPower(int amount) => BaseAttackPower += amount;
+    public void ModifyCritChance(int amount) => CritChance += amount;
+    public void ModifyResource(int amount) => Resource += amount;
 
     public void ApplyItems()
     {
-        if (Items.Contains("Iron Sword"))
+        foreach (var item in Items)
         {
-            Items.Remove("Iron Sword");
-            BaseAttackPower += 1;
-            CritChance += 5;
+            item.Apply(this);
+            item.ApplyPassive(this);
         }
     }
-    public void PassiveItems()
+    public void ResetStats()
     {
-        if (Items.Contains("Staff Of Fire"))
-        {
-            Resource++;
+        AttackPower = BaseAttackPower;
+    }
+    public bool RollCrit()
+    {
+        return RandomNumberGenerator.Next(1, 101) <= CritChance;
+    }
+    public int CalculateDamage()
+    {
+        int ap = AttackPower;
+        if (RollCrit()) 
+        { 
+            ap *= 2;
+            Console.WriteLine($"{Name} crit ");
         }
-        if (Health <= 10)
-        {
-            DrinkHealingPotion();
-        }
+        return ap;
     }
 
-    public void Crit()
-    {
-        var RandomNumber = RandomNumberGenerator.Next(0, 100);
-        if (RandomNumber <= CritChance)
-        {
-            DidItCrit = true;
-            AttackPower = BaseAttackPower * 2;
-            Console.WriteLine($"{Name} crit ");
-        } else
-        {
-            DidItCrit = false;
-        }
-    }
-    public void DrinkHealingPotion()
-    {
-        if (Items.Contains("Healing Potion"))
-        {
-            Items.Remove("Healing Potion");
-            Health += 5;
-            Console.WriteLine($"{Name} used Healing Potion");
-        }
-    }
+
     public void TakeDamage(int amount)
     {
-        Health -= amount;
+        Health = Math.Max(0,Health - amount);
     }
     public void ResourceGain()
     {
         Resource ++;
+    }
+    public void Heal(int amount)
+    {
+        Health += amount;
     }
     public void PrintStats()
     {
         Console.WriteLine($"--- Name:    {Name} ");
         Console.WriteLine($"--- Class:   {ClassName} ");
         Console.WriteLine($"--- Health:  {Health} ");
-        Console.WriteLine($"--- Items:   " + string.Join(", ", Items));
     }
 
-    public virtual void PowerStrike(){ }
-    public virtual void FireBall() { }
+    public virtual void UseAbility() { }
+    //public virtual void PowerStrike(){ }
+    //public virtual void FireBall() { }
 }
 class Warrior : Character
 {
@@ -96,24 +87,20 @@ class Warrior : Character
         Armor = 1;
         Resource = 0;
         CritChance = 10;
-        Items.Add("Healing Potion");
-        Items.Add("Iron Sword");
+        Items.Add(new HealingPotion());
+        Items.Add(new IronSword());
 
         
         
     }
 
-
-    public override void PowerStrike()
+    public override void UseAbility() => PowerStrike();
+    public void PowerStrike()
     {
         if (Resource >= 2)
         {
             AttackPower += 1;
-            Resource -= 2;
-            if (DidItCrit == true)
-            {
-                AttackPower += 1;
-            }
+            Resource -= 2;            
         }
     }
 }
@@ -129,23 +116,86 @@ class Mage : Character
         Armor = 1;   
         Resource = 0;
         CritChance = 20;
-        Items.Add("Healing Potion");
-        Items.Add("Staff Of Fire");
+        Items.Add(new HealingPotion());
+        Items.Add(new StaffOfFire());
 
     }
-    public override void FireBall()
+    public override void UseAbility() => FireBall();
+    public  void FireBall()
     {
         if (Resource >= 4)
         {
             AttackPower += 10;
             Resource -= 4;
-            if (DidItCrit == true)
-            {
-                AttackPower += 10;
-            }
         } 
     }
 }
+interface IItem
+{
+    void Apply(Character c);
+    void ApplyPassive(Character c);
+    string Name { get; }
+}
+abstract class Item : IItem
+{
+    public string Name { get; protected set; }
+
+    public Item(string name)
+    {
+        Name = name; 
+    }
+    public abstract void Apply(Character c);
+    public virtual void ApplyPassive(Character c) { }
+}
+
+class HealingPotion : Item
+{
+    public HealingPotion() : base("Healing Potion") { }
+
+    private int Charges;
+
+    public override void Apply(Character c)
+    {
+        Console.WriteLine($"{c.Name} Equipped {Name}");
+        Charges = 1;
+    }
+    public override void ApplyPassive(Character c)
+    {
+        if (c.Health <= 12 && Charges > 0)
+        {
+        Console.WriteLine($"{c.Name} used {Name}: +5 Health");
+        c.Heal(5);
+        Charges = Math.Max(0, Charges - 1);
+        }
+        
+    }
+}
+
+class StaffOfFire : Item
+{
+    public StaffOfFire() : base("Staff of Fire") { }
+    public override void Apply(Character c)
+    {
+        
+        Console.WriteLine($"{c.Name} Equipped {Name}");
+    }
+    public override void ApplyPassive(Character c)
+    {
+        Console.WriteLine($"{c.Name} gain 1 Resource from {Name}");
+        c.ModifyResource(1);
+    }
+}
+class IronSword : Item
+{
+    public IronSword() : base("Iron Sword") { }
+    public override void Apply(Character c)
+    {
+        c.ModifyBaseAttackPower(1);
+        c.ModifyCritChance(5);
+        Console.WriteLine($"{c.Name} Equipped {Name}: +1 Attack, +5% Crit");
+    }
+}
+
 
 class Battle
 {
@@ -171,16 +221,14 @@ class Battle
             Rounds ++;
             Console.WriteLine($"-----Round{Rounds}-----");
             Thread.Sleep(4000);
-            c1.AttackPower = c1.BaseAttackPower;
-            c2.AttackPower = c2.BaseAttackPower;
-            c1.PassiveItems();
-            c2.PassiveItems();
-            c1.Crit();
-            c2.Crit();
-            c1.PowerStrike();
-            c2.FireBall();
-            c1.TakeDamage(Math.Max(0,c2.AttackPower - c1.Armor));
-            c2.TakeDamage(Math.Max(0,c1.AttackPower - c2.Armor));
+            c1.ResetStats();
+            c2.ResetStats();
+            foreach (var item in c1.Items) item.ApplyPassive(c1);
+            foreach (var item in c2.Items) item.ApplyPassive(c2);
+            c1.UseAbility();
+            c2.UseAbility();
+            c1.TakeDamage(Math.Max(0,c2.CalculateDamage() - c1.Armor));
+            c2.TakeDamage(Math.Max(0,c1.CalculateDamage() - c2.Armor));
             c1.ResourceGain();
             c2.ResourceGain();
             Console.WriteLine($"{c1.Name}'s Health:{c1.Health} Resource {c1.Resource}, Ap {c1.AttackPower}");
